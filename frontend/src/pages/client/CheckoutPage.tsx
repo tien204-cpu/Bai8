@@ -13,6 +13,8 @@ export function CheckoutPage() {
   const [form, setForm] = useState({ fullName: '', phone: '', address: '', city: '' })
   const [note, setNote] = useState('')
   const [success, setSuccess] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const total = state.cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
 
   if (!state.user) {
@@ -25,11 +27,19 @@ export function CheckoutPage() {
     return null
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.fullName || !form.phone || !form.address || !form.city) return
-    placeOrder(form, note || undefined)
-    setSuccess(true)
+    setIsLoading(true)
+    setError(null)
+    try {
+      await placeOrder(form, note || undefined)
+      setSuccess(true)
+    } catch (err: any) {
+      setError(err.message || 'Failed to place order')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   if (success) {
@@ -55,6 +65,8 @@ export function CheckoutPage() {
       </button>
       <h1 className="text-2xl font-bold mb-8">Checkout</h1>
 
+      {error && <div className="mb-6 p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg">{error}</div>}
+
       <form onSubmit={handleSubmit}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2 space-y-6">
@@ -62,19 +74,20 @@ export function CheckoutPage() {
               <CardContent className="p-6">
                 <h3 className="font-semibold mb-4">Shipping Information</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Input label="Full Name" placeholder="Nguyen Van A" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required />
-                  <Input label="Phone" placeholder="0901234567" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
+                  <Input label="Full Name" placeholder="Nguyen Van A" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required disabled={isLoading} />
+                  <Input label="Phone" placeholder="0901234567" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required disabled={isLoading} />
                   <div className="sm:col-span-2">
-                    <Input label="Address" placeholder="123 Le Loi, District 1" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required />
+                    <Input label="Address" placeholder="123 Le Loi, District 1" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} required disabled={isLoading} />
                   </div>
-                  <Input label="City" placeholder="Ho Chi Minh" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required />
+                  <Input label="City" placeholder="Ho Chi Minh" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required disabled={isLoading} />
                   <div>
                     <label className="text-sm font-medium text-foreground">Note (optional)</label>
                     <textarea
-                      className="mt-1.5 flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      className="mt-1.5 flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                       placeholder="Delivery instructions..."
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -122,7 +135,7 @@ export function CheckoutPage() {
                     <span className="text-primary">{formatPrice(total)}</span>
                   </div>
                 </div>
-                <Button type="submit" className="w-full" size="lg">Place Order</Button>
+                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>{isLoading ? 'Processing...' : 'Place Order'}</Button>
                 <p className="text-xs text-muted-foreground text-center mt-3">By placing this order, you agree to our Terms of Service</p>
               </CardContent>
             </Card>

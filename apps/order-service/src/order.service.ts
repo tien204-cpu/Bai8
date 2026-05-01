@@ -158,41 +158,47 @@ export class OrderService {
   }
 
   async updateStatus(orderId: string, dto: UpdateOrderStatusDto) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      include: { items: true },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: dto.status },
-      include: { items: true },
-    });
-
-    // Emit status update event
-    this.rmqClient.emit(EVENT_PATTERNS.ORDER_STATUS_UPDATED, {
-      orderId,
-      userId: order.userId,
-      oldStatus: order.status,
-      newStatus: dto.status,
-    });
-
-    // If cancelled, emit cancel event to release inventory
-    if (dto.status === OrderStatus.CANCELLED) {
-      this.rmqClient.emit(EVENT_PATTERNS.ORDER_CANCELLED, {
-        orderId,
-        items: order.items.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
+    try {
+      const order = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
       });
-    }
 
-    return this.toResponse(updated);
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      const updated = await this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: dto.status },
+        include: { items: true },
+      });
+
+      // Emit status update event
+      this.rmqClient.emit(EVENT_PATTERNS.ORDER_STATUS_UPDATED, {
+        orderId,
+        userId: order.userId,
+        oldStatus: order.status,
+        newStatus: dto.status,
+      });
+
+      // If cancelled, emit cancel event to release inventory
+      if (String(dto.status) === 'CANCELLED') {
+        this.rmqClient.emit(EVENT_PATTERNS.ORDER_CANCELLED, {
+          orderId,
+          items: order.items.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        });
+      }
+
+      this.logger.log(`Order ${orderId} status updated to ${dto.status}`);
+      return this.toResponse(updated);
+    } catch (error) {
+      this.logger.error(`Error updating order status: ${error.message}`, error.stack);
+      throw error;
+    }
   }
 
   // Called when payment is completed

@@ -108,6 +108,8 @@ function ProductForm({ product, onClose }: { product: Product | null; onClose: (
     imageUrls: product?.imageUrls || [],
   })
   const [imagePreview, setImagePreview] = useState<string>(product?.imageUrls[0] || '')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -124,53 +126,92 @@ function ProductForm({ product, onClose }: { product: Product | null; onClose: (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (product) {
-      await updateProduct(product.id, { ...form })
-    } else {
-      await addProduct({
-        ...form,
-        isActive: true,
-      })
+    setError(null)
+
+    // Validation
+    if (!form.name?.trim()) {
+      setError('Product name is required')
+      return
     }
-    onClose()
+    if (!form.sku?.trim()) {
+      setError('SKU is required')
+      return
+    }
+    if (form.price <= 0) {
+      setError('Price must be greater than 0')
+      return
+    }
+    if (!form.categoryId) {
+      setError('Please select a category')
+      return
+    }
+    if (!product && !form.imageUrls.length) {
+      setError('Please upload a product image')
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      if (product) {
+        const { stock, ...updateData } = form
+        await updateProduct(product.id, updateData)
+      } else {
+        await addProduct({
+          name: form.name,
+          description: form.description,
+          price: form.price,
+          sku: form.sku,
+          categoryId: form.categoryId,
+          imageUrls: form.imageUrls,
+          initialStock: form.stock,
+        })
+      }
+      onClose()
+    } catch (err: any) {
+      setError(err.message || 'Failed to save product')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
     <Card className="animate-scale-in">
       <CardContent className="p-6">
         <h3 className="font-semibold mb-4">{product ? 'Edit Product' : 'Add New Product'}</h3>
+        {error && <div className="mb-4 p-3 bg-destructive/10 border border-destructive text-destructive rounded-lg text-sm">{error}</div>}
         <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-          <Input label="SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} required />
-          <Input label="Price (VND)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required />
+          <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required disabled={isSubmitting} />
+          <Input label="SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} required disabled={isSubmitting} />
+          <Input label="Price (VND)" type="number" value={form.price} onChange={(e) => setForm({ ...form, price: Number(e.target.value) })} required disabled={isSubmitting} />
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Category</label>
-            <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
+            <select className="flex h-10 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-50" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })} disabled={isSubmitting}>
               {state.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
-          <Input label="Stock" type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} />
+          <Input label="Stock" type="number" value={form.stock} onChange={(e) => setForm({ ...form, stock: Number(e.target.value) })} disabled={isSubmitting} />
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Product Image (Local File only)</label>
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-lg bg-secondary/50 border overflow-hidden flex items-center justify-center shrink-0">
                 {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <Plus className="h-6 w-6 text-muted-foreground" />}
               </div>
-              <input 
-                type="file" 
-                accept="image/*" 
+              <input
+                type="file"
+                accept="image/*"
                 onChange={handleImageChange}
-                className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90 cursor-pointer"
+                disabled={isSubmitting}
+                className="text-xs file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground hover:file:opacity-90 cursor-pointer disabled:opacity-50"
               />
             </div>
           </div>
           <div className="sm:col-span-2 space-y-1.5">
             <label className="text-sm font-medium">Description</label>
-            <textarea className="flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <textarea className="flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm disabled:opacity-50" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} disabled={isSubmitting} />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">{product ? 'Update' : 'Create'} Product</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Cancel</Button>
+            <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : (product ? 'Update' : 'Create')} Product</Button>
           </div>
         </form>
       </CardContent>

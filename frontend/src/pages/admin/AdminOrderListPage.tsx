@@ -11,8 +11,22 @@ const STATUS_OPTIONS: OrderStatus[] = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SH
 export function AdminOrderListPage() {
   const { state, updateOrderStatus } = useStore()
   const [statusFilter, setStatusFilter] = useState<string>('')
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const filtered = statusFilter ? state.orders.filter((o) => o.status === statusFilter) : state.orders
+
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    setUpdatingId(orderId)
+    setError(null)
+    try {
+      await updateOrderStatus(orderId, newStatus)
+    } catch (err: any) {
+      setError(err.message || 'Failed to update order')
+    } finally {
+      setUpdatingId(null)
+    }
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -20,6 +34,8 @@ export function AdminOrderListPage() {
         <h1 className="text-2xl font-bold">Orders</h1>
         <p className="text-sm text-muted-foreground mt-1">{state.orders.length} total orders</p>
       </div>
+
+      {error && <div className="p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg text-sm">{error}</div>}
 
       <div className="flex gap-2 flex-wrap">
         <Button size="sm" variant={!statusFilter ? 'default' : 'outline'} onClick={() => setStatusFilter('')}>All</Button>
@@ -57,8 +73,9 @@ export function AdminOrderListPage() {
                     <td className="px-4 py-3 text-right">
                       <select
                         value={order.status}
-                        onChange={(e) => updateOrderStatus(order.id, e.target.value as OrderStatus)}
-                        className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                        onChange={(e) => handleStatusChange(order.id, e.target.value as OrderStatus)}
+                        disabled={updatingId === order.id}
+                        className="h-8 rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50 cursor-pointer"
                       >
                         {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>

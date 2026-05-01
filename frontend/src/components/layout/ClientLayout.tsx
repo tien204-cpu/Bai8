@@ -1,14 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, Outlet, useNavigate } from 'react-router-dom'
 import { ShoppingCart, Search, User, Menu, X, LogOut, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useStore } from '@/lib/store'
 
 export function ClientLayout() {
-  const { state, logout } = useStore()
+  const { state, logout, fetchOrders } = useStore()
   const [mobileMenu, setMobileMenu] = useState(false)
   const navigate = useNavigate()
   const cartCount = state.cart.reduce((sum, i) => sum + i.quantity, 0)
+
+  useEffect(() => {
+    if (state.user) {
+      fetchOrders()
+    }
+  }, [state.user])
 
   return (
     <div className="min-h-screen flex flex-col">

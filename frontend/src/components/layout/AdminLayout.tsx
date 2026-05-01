@@ -14,7 +14,7 @@ const navItems = [
 ]
 
 export function AdminLayout() {
-  const { state, logout, fetchProducts, fetchCategories, fetchUsers } = useStore()
+  const { state, logout, fetchProducts, fetchCategories, fetchUsers, fetchOrders } = useStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [collapsed, setCollapsed] = useState(false)
@@ -23,6 +23,7 @@ export function AdminLayout() {
     fetchProducts()
     fetchCategories()
     fetchUsers()
+    fetchOrders()
   }, [])
 
   if (!state.user || state.user.role !== 'ADMIN') {

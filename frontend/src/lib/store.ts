@@ -63,7 +63,9 @@ export function useStore() {
       const res = await api.get<PaginatedResponse<Product>>('/products')
       setState({ products: res.data })
     } catch (err: any) {
+      console.error('Error fetching products:', err)
       setState({ error: err.message })
+      // Keep existing products on error
     }
   }
 
@@ -72,7 +74,22 @@ export function useStore() {
       const res = await api.get<Category[]>('/categories')
       setState({ categories: res })
     } catch (err: any) {
+      console.error('Error fetching categories:', err)
       setState({ error: err.message })
+      // Keep existing categories on error
+    }
+  }
+
+  const fetchOrders = async () => {
+    try {
+      const isAdmin = globalState.user?.role === 'ADMIN'
+      const endpoint = isAdmin ? '/admin/orders' : '/orders'
+      const res = await api.get<PaginatedResponse<Order>>(endpoint)
+      setState({ orders: res.data })
+    } catch (err: any) {
+      console.error('Error fetching orders:', err)
+      setState({ error: err.message })
+      // Keep existing orders on error
     }
   }
 
@@ -81,7 +98,9 @@ export function useStore() {
       const res = await api.get<PaginatedResponse<User>>('/users')
       setState({ users: res.data })
     } catch (err: any) {
+      console.error('Error fetching users:', err)
       setState({ error: err.message })
+      // Keep existing users on error
     }
   }
 
@@ -89,6 +108,7 @@ export function useStore() {
     state: globalState,
     fetchProducts,
     fetchCategories,
+    fetchOrders,
     fetchUsers,
     
     login: async (email: string, password: string) => {
@@ -225,11 +245,14 @@ export function useStore() {
           note,
           items: globalState.cart.map((i) => ({
             productId: i.productId,
+            productName: i.productName,
+            price: i.price,
             quantity: i.quantity,
           })),
         })
         setState({ cart: [] })
         localStorage.removeItem('cart')
+        await fetchOrders()
         return res
       } catch (err: any) {
         setState({ error: err.message })
@@ -240,9 +263,12 @@ export function useStore() {
     updateOrderStatus: async (orderId: string, status: OrderStatus) => {
       try {
         await api.put(`/orders/${orderId}/status`, { status })
-        // Fetch orders again or update local state
+        await fetchOrders()
+        setState({ error: null })
       } catch (err: any) {
-        setState({ error: err.message })
+        const errorMsg = err.message || 'Failed to update order status'
+        setState({ error: errorMsg })
+        console.error('Error updating order status:', err)
         throw err
       }
     },

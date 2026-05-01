@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ClientLayout } from '@/components/layout/ClientLayout'
 import { AdminLayout } from '@/components/layout/AdminLayout'
@@ -13,8 +14,16 @@ import { AdminProductListPage } from '@/pages/admin/AdminProductListPage'
 import { AdminCategoryPage } from '@/pages/admin/AdminCategoryPage'
 import { AdminOrderListPage } from '@/pages/admin/AdminOrderListPage'
 import { AdminUserListPage } from '@/pages/admin/AdminUserListPage'
+import { useStore } from '@/lib/store'
 
 function App() {
+  const { fetchProducts, fetchCategories } = useStore()
+
+  useEffect(() => {
+    fetchProducts()
+    fetchCategories()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
