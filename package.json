@@ -1,0 +1,19 @@
+{
+  "name": "ecommerce-microservices",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-Stack Microservices E-Commerce System",
+  "scripts": {
+    "build:all": "pnpm -r run build",
+    "lint:all": "pnpm -r run lint",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:build": "docker-compose build",
+    "prisma:generate:all": "pnpm -r --filter './apps/*-service' run prisma:generate",
+    "prisma:migrate:all": "pnpm -r --filter './apps/*-service' run prisma:migrate"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

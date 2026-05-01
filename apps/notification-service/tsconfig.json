@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "@ecommerce/shared-dto": ["../../libs/shared-dto/src"],
+      "@ecommerce/shared-dto/*": ["../../libs/shared-dto/src/*"],
+      "@ecommerce/shared-rmq": ["../../libs/shared-rmq/src"],
+      "@ecommerce/shared-rmq/*": ["../../libs/shared-rmq/src/*"]
+    }
+  },
+  "include": ["src/**/*", "../../libs/shared-dto/src/**/*", "../../libs/shared-rmq/src/**/*"]
+}

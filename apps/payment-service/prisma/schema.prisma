@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentMethod {
+  STRIPE
+  VNPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  orderId               String        @map("order_id")
+  userId                String        @map("user_id")
+  amount                Decimal       @db.Decimal(12, 2)
+  currency              String        @default("VND")
+  method                PaymentMethod
+  status                PaymentStatus @default(PENDING)
+  providerTransactionId String?       @map("provider_transaction_id")
+  metadata              Json?
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([providerTransactionId])
+  @@map("payments")
+}

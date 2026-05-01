@@ -1,0 +1,240 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Infrastructure Services
+  # ============================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ecommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ecommerce_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-ecommerce}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-ecommerce}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-ecommerce_secret}
+    ports:
+      - '${RABBITMQ_PORT:-5672}:5672'
+      - '15672:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecommerce-net
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # Application Services
+  # ============================================
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/api-gateway/Dockerfile
+    container_name: ecommerce-api-gateway
+    restart: unless-stopped
+    ports:
+      - '${API_GATEWAY_PORT:-3000}:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - USER_SERVICE_HOST=user-service
+      - USER_SERVICE_PORT=3001
+      - PRODUCT_SERVICE_HOST=product-service
+      - PRODUCT_SERVICE_PORT=3002
+      - ORDER_SERVICE_HOST=order-service
+      - ORDER_SERVICE_PORT=3003
+      - PAYMENT_SERVICE_HOST=payment-service
+      - PAYMENT_SERVICE_PORT=3004
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      product-service:
+        condition: service_started
+      order-service:
+        condition: service_started
+      payment-service:
+        condition: service_started
+    networks:
+      - ecommerce-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: apps/user-service/Dockerfile
+    container_name: ecommerce-user-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TCP_HOST=0.0.0.0
+      - TCP_PORT=3001
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_secret}@postgres:5432/ecommerce_users?schema=public
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-15m}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-7d}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  product-service:
+    build:
+      context: .
+      dockerfile: apps/product-service/Dockerfile
+    container_name: ecommerce-product-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TCP_HOST=0.0.0.0
+      - TCP_PORT=3002
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_secret}@postgres:5432/ecommerce_products?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  order-service:
+    build:
+      context: .
+      dockerfile: apps/order-service/Dockerfile
+    container_name: ecommerce-order-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TCP_HOST=0.0.0.0
+      - TCP_PORT=3003
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_secret}@postgres:5432/ecommerce_orders?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - PRODUCT_SERVICE_HOST=product-service
+      - PRODUCT_SERVICE_PORT=3002
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: apps/payment-service/Dockerfile
+    container_name: ecommerce-payment-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - TCP_HOST=0.0.0.0
+      - TCP_PORT=3004
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ecommerce}:${POSTGRES_PASSWORD:-ecommerce_secret}@postgres:5432/ecommerce_payments?schema=public
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-sk_test_placeholder}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-whsec_placeholder}
+      - VNPAY_TMN_CODE=${VNPAY_TMN_CODE:-placeholder}
+      - VNPAY_HASH_SECRET=${VNPAY_HASH_SECRET:-placeholder}
+      - VNPAY_URL=${VNPAY_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      - VNPAY_RETURN_URL=${VNPAY_RETURN_URL:-http://localhost:3000/api/payments/webhook/vnpay}
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: apps/notification-service/Dockerfile
+    container_name: ecommerce-notification-service
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-ecommerce}:${RABBITMQ_PASSWORD:-ecommerce_secret}@rabbitmq:5672
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-noreply@ecommerce.com}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-password}
+      - EMAIL_FROM=${EMAIL_FROM:-noreply@ecommerce.com}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecommerce-net
+
+# ============================================
+# Volumes
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+# ============================================
+# Networks
+# ============================================
+networks:
+  ecommerce-net:
+    driver: bridge
